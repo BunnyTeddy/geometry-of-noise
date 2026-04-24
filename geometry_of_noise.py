@@ -69,7 +69,7 @@ def _(mo):
     | $t$ | Noise level, $t \in [0, 1]$ |
     | $\mathbf{u}_t$ | Noisy observation: $a(t)\mathbf{x} + b(t)\boldsymbol{\epsilon}$ |
     | $a(t), b(t)$ | Signal and noise schedule functions |
-    | $E_{\text{marg}}(\mathbf{u})$ | Marginal energy: $-\log p(\mathbf{u}) = -\log \int p(\mathbf{u}|t)p(t)dt$ |
+    | $E_{\text{marg}}(\mathbf{u})$ | Marginal energy: $-\log p(\mathbf{u}) = -\log \int p(\mathbf{u}\vert t)p(t)dt$ |
     | $f^*(\mathbf{u})$ | Optimal autonomous (time-invariant) vector field |
     | $G(\mathbf{u})$ | Effective gain — the conformal metric that tames the singularity |
     """)
@@ -166,7 +166,7 @@ def _(mo):
 
     The key object is the **Marginal Energy**:
 
-    $$E_{\text{marg}}(\mathbf{u}) = -\log\, p(\mathbf{u}) = -\log \int p(\mathbf{u}|t)\, p(t)\, dt$$
+    $$E_{\text{marg}}(\mathbf{u}) = -\log\, p(\mathbf{u}) = -\log \int p(\mathbf{u}\vert t)\, p(t)\, dt$$
 
     This integrates over all possible noise levels. The gradient of this energy should guide sampling — but there's a catch.
 
@@ -461,7 +461,7 @@ def _(mo):
 
     The paper proves that the optimal autonomous vector field decomposes into exactly **three geometric components**:
 
-    $$f^*(\mathbf{u}) = \underbrace{-\mathbb{E}[G(\mathbf{u})] \cdot \nabla E_{\text{marg}}(\mathbf{u})}_{\text{Natural gradient}} + \underbrace{\text{Cov}[G(\mathbf{u}), \text{posterior terms}]}_{\text{Transport correction}} + \underbrace{a(\mathbb{E}[t|\mathbf{u}]) \cdot \mathbf{u}}_{\text{Linear drift}}$$
+    $$f^*(\mathbf{u}) = \underbrace{-\mathbb{E}[G(\mathbf{u})] \cdot \nabla E_{\text{marg}}(\mathbf{u})}_{\text{Natural gradient}} + \underbrace{\text{Cov}[G(\mathbf{u}), \text{posterior terms}]}_{\text{Transport correction}} + \underbrace{a(\mathbb{E}[t\vert\mathbf{u}]) \cdot \mathbf{u}}_{\text{Linear drift}}$$
 
     | Component | Role | Intuition |
     |-----------|------|-----------|
@@ -812,7 +812,7 @@ def _(mo):
 
     | Distribution | Density | Key property |
     |-------------|---------|-------------|
-    | **Laplacian** | $p(\epsilon) \propto e^{-|\epsilon|}$ | Heavy tails, spiky at origin |
+    | **Laplacian** | $p(\epsilon) \propto e^{-\vert\epsilon\vert}$ | Heavy tails, spiky at origin |
     | **Gaussian-Laplacian mixture** | $0.5\mathcal{N} + 0.5\text{Laplace}$ | Bimodal in noise structure |
 
     Select a noise type below to train and compare:
@@ -943,7 +943,7 @@ def _(mo):
 
     | Insight | What the paper proves | Intuition |
     |---------|----------------------|-----------|
-    | **Marginal Energy** | $E_{\text{marg}}(\mathbf{u}) = -\log \int p(\mathbf{u}|t)p(t)dt$ | The landscape autonomous models optimize over |
+    | **Marginal Energy** | $E_{\text{marg}}(\mathbf{u}) = -\log \int p(\mathbf{u}\vert t)p(t)dt$ | The landscape autonomous models optimize over |
     | **Singularity** | Raw gradient has $1/t^p$ divergence near data | Infinitely deep well — can't do gradient descent |
     | **Riemannian Flow** | The learned field is $-G_{\text{eff}} \nabla E_{\text{marg}}$ | Invisible metric tames the singularity |
     | **Jensen Gap** | Epsilon-prediction amplifies errors; velocity absorbs them | Microphone feedback vs. shock absorber |
