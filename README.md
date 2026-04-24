@@ -5,7 +5,7 @@ An interactive marimo notebook exploring the geometric foundations of autonomous
 **Paper**: [arXiv:2602.18428](https://arxiv.org/abs/2602.18428) | [alphaXiv](https://www.alphaxiv.org/abs/2602.18428)
 **Authors**: Mojtaba Sahraee-Ardakan, Mauricio Delbracio, Peyman Milanfar (Google)
 
-[![Open in molab](https://marimo.io/molab-shield.svg)](https://molab.marimo.io/github/hoangjamesdeptrai/geometry-of-noise/blob/main/geometry_of_noise.py)
+[![Open in molab](https://marimo.io/molab-shield.svg)](https://molab.marimo.io/github/BunnyTeddy/geometry-of-noise/blob/main/geometry_of_noise.py)
 
 ---
 
