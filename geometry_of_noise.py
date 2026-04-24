@@ -11,7 +11,7 @@
 
 import marimo
 
-__generated_with = "0.20.4"
+__generated_with = "0.23.2"
 app = marimo.App(width="medium")
 
 
@@ -31,8 +31,7 @@ def _():
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     # The Geometry of Noise
     ## Why Diffusion Models Don't Need Noise Conditioning
 
@@ -54,15 +53,13 @@ def _(mo):
     4. **Our Extension**: The same principles hold beyond Gaussian noise
 
     ---
-    """
-    )
+    """)
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ### Notation Reference
 
     | Symbol | Meaning |
@@ -75,15 +72,13 @@ def _(mo):
     | $E_{\text{marg}}(\mathbf{u})$ | Marginal energy: $-\log p(\mathbf{u}) = -\log \int p(\mathbf{u}|t)p(t)dt$ |
     | $f^*(\mathbf{u})$ | Optimal autonomous (time-invariant) vector field |
     | $G(\mathbf{u})$ | Effective gain — the conformal metric that tames the singularity |
-    """
-    )
+    """)
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     -----
 
     ## 1. The Paradox Setup
@@ -97,8 +92,7 @@ def _(mo):
     For Flow Matching / EqM schedule: $a(t) = 1-t$, $b(t) = t$.
 
     **Drag the slider** to see how noise blurs the data. Notice how at moderate noise levels, it's **ambiguous** which original cluster a noisy point came from — that's the core challenge for a noise-agnostic model.
-    """
-    )
+    """)
     return
 
 
@@ -127,7 +121,7 @@ def _(np):
         np.array([2.0, 1.5]),
         np.array([0.0, 0.0]),
     ]
-    return create_gaussian_mixture, data_X, data_modes
+    return data_X, data_modes
 
 
 @app.cell
@@ -165,8 +159,7 @@ def _(data_X, np, plt, t_slider):
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     -----
 
     ## 2. The Marginal Energy Landscape
@@ -180,8 +173,7 @@ def _(mo):
     **Near the data manifold** (where $t \to 0$), the marginal density $p(\mathbf{u})$ has a $1/t^p$ singularity, creating an **infinitely deep potential well**. Raw gradient descent on $E_{\text{marg}}$ would diverge.
 
     Let's visualize this landscape for our Gaussian mixture:
-    """
-    )
+    """)
     return
 
 
@@ -225,11 +217,11 @@ def _(data_modes, integrate, np):
         return XX, YY, P, E_marg, xs, ys
 
     XX, YY, P_marg, E_marg, grid_xs, grid_ys = compute_marginal_density_grid(data_modes, grid_size=80)
-    return E_marg, P_marg, XX, YY, compute_marginal_density_grid, grid_xs, grid_ys
+    return E_marg, P_marg, XX, YY, grid_xs, grid_ys
 
 
 @app.cell
-def _(E_marg, P_marg, plt, XX, YY):
+def _(E_marg, P_marg, XX, YY, np, plt):
     _fig, _ax = plt.subplots(1, 2, figsize=(10, 4.5))
 
     # Marginal density
@@ -251,20 +243,17 @@ def _(E_marg, P_marg, plt, XX, YY):
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     The contour on the right shows the **infinitely deep wells** around each data mode — the $1/t^p$ singularity. If you tried to do gradient descent on this raw energy, you'd fall straight into the well and never escape.
 
     This is the **Energy Paradox**: the landscape that should guide sampling is itself too dangerous to follow naively.
-    """
-    )
+    """)
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     -----
 
     ## 3. The Resolution: Riemannian Gradient Flow
@@ -280,13 +269,12 @@ def _(mo):
     Below, we compare:
     - **Left**: The raw Euclidean gradient of $E_{\text{marg}}$ (arrows point toward the wells, diverging)
     - **Right**: The autonomous field with effective gain applied (arrows are bounded, pointing to data modes)
-    """
-    )
+    """)
     return
 
 
 @app.cell
-def _(E_marg, np, plt, grid_xs, grid_ys):
+def _(E_marg, grid_xs, grid_ys, np, plt):
     # Compute gradients of E_marg numerically
     def compute_energy_gradient(E_marg, grid_xs, grid_ys):
         grad_x = np.gradient(E_marg, grid_xs, axis=1)
@@ -373,32 +361,38 @@ def _(E_marg, np, plt, grid_xs, grid_ys):
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     See the difference? On the left, the raw gradient arrows grow huge near the data modes (the singularity). On the right, the Riemannian gradient is **bounded and smooth** — it points toward the data modes without the dangerous divergence.
 
     The effective gain $G_{\text{eff}}(\mathbf{u})$ acts like an **automatic brake**: it's small where the gradient is dangerous (near data) and larger where the gradient is safe (far from data).
-    """
-    )
+    """)
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ### Particle Flow Comparison
 
     Let's trace particles from random starting points:
     - **Red**: Following the raw Euclidean gradient (diverges, crashes)
     - **Blue**: Following the Riemannian/autonomous gradient (converges smoothly)
-    """
-    )
+    """)
     return
 
 
 @app.cell
-def _(E_marg, grad_E_x, grad_E_y, grid_xs, grid_ys, np, plt, riemann_grad_x, riemann_grad_y):
+def _(
+    E_marg,
+    grad_E_x,
+    grad_E_y,
+    grid_xs,
+    grid_ys,
+    np,
+    plt,
+    riemann_grad_x,
+    riemann_grad_y,
+):
     def trace_particle(start, grad_field_x, grad_field_y, grid_xs, grid_ys, n_steps=100, lr=0.05):
         """Trace a particle following a vector field using Euler integration."""
         path = [start.copy()]
@@ -455,13 +449,12 @@ def _(E_marg, grad_E_x, grad_E_y, grid_xs, grid_ys, np, plt, riemann_grad_x, rie
 
     _fig.tight_layout()
     _fig
-    return (trace_particle,)
+    return
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     -----
 
     ## 4. Energy-Aligned Decomposition
@@ -477,8 +470,7 @@ def _(mo):
     | Linear drift | Signal scaling based on expected noise level | "Rescaling" the signal amplitude |
 
     Use the toggles below to see each component's contribution:
-    """
-    )
+    """)
     return
 
 
@@ -492,7 +484,19 @@ def _(mo):
 
 
 @app.cell
-def _(G_eff, E_marg, grad_E_x, grad_E_y, grid_xs, grid_ys, np, plt, show_drift, show_natural, show_transport):
+def _(
+    E_marg,
+    G_eff,
+    grad_E_x,
+    grad_E_y,
+    grid_xs,
+    grid_ys,
+    np,
+    plt,
+    show_drift,
+    show_natural,
+    show_transport,
+):
     # Decompose the autonomous field into 3 components
     # Component 1: Natural gradient = -G_eff * grad_E_marg
     nat_gx = -G_eff * grad_E_x
@@ -566,8 +570,7 @@ def _(G_eff, E_marg, grad_E_x, grad_E_y, grid_xs, grid_ys, np, plt, show_drift, 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     -----
 
     ## 5. Jensen Gap & Stability: Why Velocity Works and Noise-Prediction Fails
@@ -587,13 +590,12 @@ def _(mo):
     The effective gain involves $\mathbb{E}[g(\mathbf{u},t)]$ directly, which satisfies a **bounded-gain condition**. Uncertainty is absorbed into a smooth geometric drift. It's like a shock absorber that smooths out bumps.
 
     Let's train small autonomous models with both parameterizations and see the difference:
-    """
-    )
+    """)
     return
 
 
 @app.cell
-def _(np):
+def _():
     import torch as _torch
     import torch.nn as _nn
 
@@ -660,7 +662,7 @@ def _(np):
 
 
 @app.cell
-def _(AutonomousField, data_X, np, plt, train_autonomous_model):
+def _(data_X, np, plt, train_autonomous_model):
     import torch as _torch
     import torch.nn as _nn
 
@@ -726,18 +728,16 @@ def _(AutonomousField, data_X, np, plt, train_autonomous_model):
     _ax[1].set_aspect("equal")
     _fig.tight_layout()
     _fig
-    return model_eps, model_vel, sample_autonomous, traj_eps, traj_vel
+    return (sample_autonomous,)
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     The velocity-based autonomous model produces samples that cluster around the data modes. The epsilon-based model, however, often diverges or produces poor samples — the Jensen Gap amplifies estimation errors.
 
     Let's visualize the **amplification factor** (the effective gain) for both parameterizations as a function of the posterior uncertainty:
-    """
-    )
+    """)
     return
 
 
@@ -787,20 +787,17 @@ def _(np, plt):
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     The red region (Jensen Gap) shows why epsilon-prediction fails: even small estimation errors get amplified into large divergences, especially when the noise level is ambiguous (high posterior uncertainty). Velocity-prediction absorbs these errors smoothly.
 
     **This is the practical takeaway**: if you want to build an autonomous (noise-agnostic) generative model, you **must** use velocity-prediction. Noise-prediction is structurally unstable without explicit noise conditioning.
-    """
-    )
+    """)
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     -----
 
     ## 6. Novel Extension: Beyond Gaussian Noise
@@ -819,8 +816,7 @@ def _(mo):
     | **Gaussian-Laplacian mixture** | $0.5\mathcal{N} + 0.5\text{Laplace}$ | Bimodal in noise structure |
 
     Select a noise type below to train and compare:
-    """
-    )
+    """)
     return
 
 
@@ -836,7 +832,7 @@ def _(mo):
 
 
 @app.cell
-def _(AutonomousField, data_X, np, plt, train_autonomous_model):
+def _(AutonomousField, data_X, np):
     import torch as _torch
     import torch.nn as _nn
 
@@ -890,11 +886,11 @@ def _(AutonomousField, data_X, np, plt, train_autonomous_model):
         "Laplacian": model_laplace,
         "Gaussian-Laplacian Mixture": model_mixture,
     }
-    return noise_models, train_with_noise_type
+    return (noise_models,)
 
 
 @app.cell
-def _(data_X, noise_dropdown, noise_models, np, plt, sample_autonomous):
+def _(data_X, noise_dropdown, noise_models, plt, sample_autonomous):
     # Sample from selected noise model
     _key = noise_dropdown.value
     _model = noise_models[_key]
@@ -922,8 +918,7 @@ def _(data_X, noise_dropdown, noise_models, np, plt, sample_autonomous):
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ### Key Finding from the Extension
 
     The autonomous field **adapts its effective gain** to the noise geometry:
@@ -935,15 +930,13 @@ def _(mo):
     This suggests the Riemannian flow insight is a **general principle**, not a Gaussian artifact. The conformal metric $G_{\text{eff}}(\mathbf{u})$ adapts to whatever noise structure it encounters, as long as the parameterization satisfies the bounded-gain condition.
 
     **Implication**: The paper's theoretical framework extends beyond Gaussian diffusion to any noise model where the velocity-prediction parameterization is used. This opens the door to autonomous generative models for heavy-tailed and multimodal noise — settings common in real-world data like financial time series, radar signals, and medical imaging.
-    """
-    )
+    """)
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     -----
 
     ## 7. Summary & Key Takeaways
@@ -957,19 +950,16 @@ def _(mo):
     | **Extension** (ours) | Riemannian flow works beyond Gaussian noise | The principle is universal, not Gaussian-specific |
 
     **Bottom line**: Autonomous (noise-agnostic) diffusion models work because they don't follow the raw energy gradient — they follow a **Riemannian gradient** with an automatically learned metric that neutralizes the singularity. And this works for velocity-prediction but not noise-prediction, due to a fundamental Jensen Gap asymmetry.
-    """
-    )
+    """)
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(
-        r"""
+    mo.md(r"""
     ---
     *Notebook by Hoang Chi Bang. Based on "The Geometry of Noise: Why Diffusion Models Don't Need Noise Conditioning" by Sahraee-Ardakan, Delbracio, and Milanfar (Google, 2026). The non-Gaussian noise extension is a novel contribution of this notebook.*
-    """
-    )
+    """)
     return
 
 

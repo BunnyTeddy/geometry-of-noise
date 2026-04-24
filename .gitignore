@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Marimo
+__marimo__/
+
+# Screenshots and temp files
+*.png
+!badge*.png
+
+# PDF papers (large, not needed in repo)
+*.pdf
+
+# Agents/skills cache
+.agents/
+skills-lock.json
+
+# Session data
+*.session.json
