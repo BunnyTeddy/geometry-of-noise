@@ -5,7 +5,6 @@
 #     "numpy",
 #     "scipy",
 #     "matplotlib",
-#     "torch",
 # ]
 # ///
 
@@ -595,77 +594,146 @@ def _(mo):
 
 
 @app.cell
-def _():
-    import torch as _torch
-    import torch.nn as _nn
+def _(np):
+    # Pure-numpy MLP + Adam optimizer (no torch dependency — runs in WASM/molab)
 
-    # Small MLP for the autonomous vector field
-    class AutonomousField(_nn.Module):
-        def __init__(self, hidden_dim=64):
-            super().__init__()
-            self.net = _nn.Sequential(
-                _nn.Linear(2, hidden_dim),
-                _nn.SiLU(),
-                _nn.Linear(hidden_dim, hidden_dim),
-                _nn.SiLU(),
-                _nn.Linear(hidden_dim, 2),
-            )
+    class NumpyMLP:
+        """Small MLP with SiLU activations, implemented in pure numpy."""
+        def __init__(self, layer_sizes, seed=42):
+            rng = np.random.RandomState(seed)
+            self.weights = []
+            self.biases = []
+            for i in range(len(layer_sizes) - 1):
+                # He initialization
+                w = rng.randn(layer_sizes[i], layer_sizes[i + 1]) * np.sqrt(2.0 / layer_sizes[i])
+                b = np.zeros((1, layer_sizes[i + 1]))
+                self.weights.append(w)
+                self.biases.append(b)
+            self.rng = rng
 
-        def forward(self, u):
-            return self.net(u)
+        @staticmethod
+        def _sigmoid(x):
+            return 1.0 / (1.0 + np.exp(-np.clip(x, -500, 500)))
+
+        @staticmethod
+        def _silu(x):
+            return x * (1.0 / (1.0 + np.exp(-np.clip(x, -500, 500))))
+
+        @staticmethod
+        def _silu_derivative(x):
+            sig = 1.0 / (1.0 + np.exp(-np.clip(x, -500, 500)))
+            return sig * (1.0 + x * (1.0 - sig))
+
+        def forward(self, x):
+            """Forward pass, storing activations for backprop."""
+            self._activations = [x]
+            self._pre_activations = []
+            z = x
+            for i in range(len(self.weights) - 1):
+                z = z @ self.weights[i] + self.biases[i]
+                self._pre_activations.append(z)
+                z = self._silu(z)
+                self._activations.append(z)
+            # Last layer: linear (no activation)
+            z = z @ self.weights[-1] + self.biases[-1]
+            self._pre_activations.append(z)
+            self._activations.append(z)
+            return z
+
+        def backward(self, grad_output):
+            """Backward pass, returning gradients for weights and biases."""
+            grads_w = []
+            grads_b = []
+            grad = grad_output
+            for i in range(len(self.weights) - 1, -1, -1):
+                grads_w.insert(0, self._activations[i].T @ grad / grad.shape[0])
+                grads_b.insert(0, np.mean(grad, axis=0, keepdims=True))
+                if i > 0:
+                    grad = grad @ self.weights[i].T
+                    grad = grad * self._silu_derivative(self._pre_activations[i - 1])
+            return grads_w, grads_b
+
+        def get_params(self):
+            """Flatten all params into a single list (for optimizer)."""
+            return list(self.weights) + list(self.biases)
+
+        def set_params(self, params):
+            """Set weights and biases from a flat param list."""
+            n = len(self.weights)
+            self.weights = list(params[:n])
+            self.biases = list(params[n:])
+
+    class AdamNumpy:
+        """Adam optimizer in pure numpy."""
+        def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8):
+            self.lr = lr
+            self.beta1, self.beta2 = betas
+            self.eps = eps
+            self.m = [np.zeros_like(p) for p in params]
+            self.v = [np.zeros_like(p) for p in params]
+            self.t = 0
+
+        def step(self, params, grads):
+            self.t += 1
+            new_params = []
+            for i, (p, g) in enumerate(zip(params, grads)):
+                self.m[i] = self.beta1 * self.m[i] + (1 - self.beta1) * g
+                self.v[i] = self.beta2 * self.v[i] + (1 - self.beta2) * g ** 2
+                m_hat = self.m[i] / (1 - self.beta1 ** self.t)
+                v_hat = self.v[i] / (1 - self.beta2 ** self.t)
+                new_params.append(p - self.lr * m_hat / (np.sqrt(v_hat) + self.eps))
+            return new_params
 
     def train_autonomous_model(X_data, param_type="velocity", n_epochs=800, lr=1e-3, seed=42):
-        """Train an autonomous (time-invariant) model.
+        """Train an autonomous (time-invariant) model using pure numpy.
 
         Args:
             X_data: (N, 2) clean data
             param_type: "velocity" or "epsilon"
         """
-        _torch.manual_seed(seed)
-        model = AutonomousField(hidden_dim=64)
-        optimizer = _torch.optim.Adam(model.parameters(), lr=lr)
+        rng = np.random.RandomState(seed)
+        model = NumpyMLP([2, 64, 64, 2], seed=seed)
+        optimizer = AdamNumpy(model.get_params(), lr=lr)
 
-        X_t = _torch.tensor(X_data, dtype=_torch.float32)
-        N = X_t.shape[0]
+        N = X_data.shape[0]
         losses = []
 
         for epoch in range(n_epochs):
             # Sample t ~ Uniform[0.02, 0.98]
-            t = _torch.rand(N, 1) * 0.96 + 0.02
-            eps = _torch.randn(N, 2)
+            t = rng.rand(N, 1) * 0.96 + 0.02
+            eps = rng.randn(N, 2)
 
             a_t = 1 - t  # (N, 1)
             b_t = t       # (N, 1)
 
-            u = a_t * X_t + b_t * eps  # (N, 2)
+            u = a_t * X_data + b_t * eps  # (N, 2)
 
             if param_type == "velocity":
-                # Velocity target: v = x - eps (for Flow Matching)
-                target = X_t - eps
+                target = X_data - eps
             else:
-                # Epsilon target: just predict the noise
                 target = eps
 
-            pred = model(u)
-            loss = _nn.functional.mse_loss(pred, target)
+            pred = model.forward(u)
+            diff = pred - target
+            loss = np.mean(diff ** 2)
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            grad_output = 2 * diff / diff.shape[0]  # gradient of MSE w.r.t. pred
+            grads_w, grads_b = model.backward(grad_output)
+            all_grads = grads_w + grads_b
+
+            new_params = optimizer.step(model.get_params(), all_grads)
+            model.set_params(new_params)
 
             if epoch % 100 == 0:
-                losses.append(loss.item())
+                losses.append(loss)
 
         return model, losses
 
-    return AutonomousField, train_autonomous_model
+    return NumpyMLP, AdamNumpy, train_autonomous_model
 
 
 @app.cell
 def _(data_X, np, plt, train_autonomous_model):
-    import torch as _torch
-    import torch.nn as _nn
-
     # Train both models
     model_vel, losses_vel = train_autonomous_model(data_X, param_type="velocity", n_epochs=1000, lr=2e-3)
     model_eps, losses_eps = train_autonomous_model(data_X, param_type="epsilon", n_epochs=1000, lr=2e-3)
@@ -680,38 +748,33 @@ def _(data_X, np, plt, train_autonomous_model):
 
     # Sample from both models using Euler integration
     def sample_autonomous(model, n_samples=200, n_steps=50, dt_sample=0.02, seed=0):
-        _torch.manual_seed(seed)
-        # Start from pure noise (t=1): u = 0*data + 1*noise
-        u = _torch.randn(n_samples, 2)
-        trajectory = [u.clone().detach().numpy()]
+        rng = np.random.RandomState(seed)
+        u = rng.randn(n_samples, 2)
+        trajectory = [u.copy()]
 
-        for step in range(n_steps):
-            pred = model(u)
-            if True:  # velocity parameterization: du/dt = v, but we go backward
-                u = u - dt_sample * pred
-            trajectory.append(u.clone().detach().numpy())
+        for _step in range(n_steps):
+            pred = model.forward(u)
+            u = u - dt_sample * pred
+            trajectory.append(u.copy())
 
         return np.array(trajectory)
 
     def sample_epsilon_autonomous(model, n_samples=200, n_steps=50, dt_sample=0.02, seed=0):
         """Sample using epsilon-prediction autonomous model."""
-        _torch.manual_seed(seed)
-        u = _torch.randn(n_samples, 2)
-        trajectory = [u.clone().detach().numpy()]
+        rng = np.random.RandomState(seed)
+        u = rng.randn(n_samples, 2)
+        trajectory = [u.copy()]
 
-        for step in range(n_steps):
-            eps_pred = model(u)
+        for _step in range(n_steps):
+            eps_pred = model.forward(u)
             # For epsilon-prediction, we need to convert to a denoising step
-            # The step: u_new = u - dt * (u - eps_pred) / max(t_estimate, 0.01)
             # But without knowing t, we use a fixed scale
             # This is where the Jensen Gap causes problems
-            t_est = max(1.0 - step / n_steps, 0.01)
-            # The field u -> (u - a(t)*eps_est) / a(t)  but a(t) is unknown
-            # Naive approach: use the predicted epsilon to denoise
+            t_est = max(1.0 - _step / n_steps, 0.01)
             scale = 1.0 / max(t_est, 0.05)  # amplification factor
             direction = (u - eps_pred * t_est)
             u = u - dt_sample * scale * (u - direction)
-            trajectory.append(u.clone().detach().numpy())
+            trajectory.append(u.copy())
 
         return np.array(trajectory)
 
@@ -832,49 +895,44 @@ def _(mo):
 
 
 @app.cell
-def _(AutonomousField, data_X, np):
-    import torch as _torch
-    import torch.nn as _nn
-
+def _(AdamNumpy, NumpyMLP, data_X, np):
     # Train autonomous models with different noise types
     def train_with_noise_type(X_data, noise_type="Gaussian", n_epochs=800, lr=2e-3, seed=42):
         """Train velocity-parameterized autonomous model with non-Gaussian noise."""
-        _torch.manual_seed(seed)
-        mdl = AutonomousField(hidden_dim=64)
-        optimizer = _torch.optim.Adam(mdl.parameters(), lr=lr)
+        rng = np.random.RandomState(seed)
+        mdl = NumpyMLP([2, 64, 64, 2], seed=seed)
+        optimizer = AdamNumpy(mdl.get_params(), lr=lr)
 
-        X_t = _torch.tensor(X_data, dtype=_torch.float32)
-        N = X_t.shape[0]
+        N = X_data.shape[0]
 
         for epoch in range(n_epochs):
-            t = _torch.rand(N, 1) * 0.96 + 0.02
+            t = rng.rand(N, 1) * 0.96 + 0.02
 
             if noise_type == "Gaussian":
-                eps = _torch.randn(N, 2)
+                eps = rng.randn(N, 2)
             elif noise_type == "Laplacian":
-                eps = _torch.distributions.Laplace(0, 1.0 / np.sqrt(2)).sample((N, 2))
+                eps = np.random.laplace(0, 1.0 / np.sqrt(2), size=(N, 2))
             else:  # Mixture
-                mask = _torch.rand(N, 1) > 0.5
-                eps_g = _torch.randn(N, 2)
-                eps_l = _torch.distributions.Laplace(0, 1.0 / np.sqrt(2)).sample((N, 2))
-                eps = _torch.where(mask, eps_g, eps_l)
+                mask = rng.rand(N, 1) > 0.5
+                eps_g = rng.randn(N, 2)
+                eps_l = np.random.laplace(0, 1.0 / np.sqrt(2), size=(N, 2))
+                eps = np.where(mask, eps_g, eps_l)
 
             a_t = 1 - t
             b_t = t
-            u = a_t * X_t + b_t * eps
-            target = X_t - eps  # velocity target
+            u = a_t * X_data + b_t * eps
+            target = X_data - eps  # velocity target
 
-            pred = mdl(u)
-            loss = _nn.functional.mse_loss(pred, target)
+            pred = mdl.forward(u)
+            diff = pred - target
+            grad_output = 2 * diff / diff.shape[0]
+            grads_w, grads_b = mdl.backward(grad_output)
+            all_grads = grads_w + grads_b
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+            new_params = optimizer.step(mdl.get_params(), all_grads)
+            mdl.set_params(new_params)
 
         return mdl
-
-    # Re-define AutonomousField for noise extension cell
-    _AutonomousField = AutonomousField
 
     # Train models for all noise types (this takes a few seconds each)
     model_gauss = train_with_noise_type(data_X, "Gaussian", n_epochs=800)
