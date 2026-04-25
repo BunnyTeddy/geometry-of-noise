@@ -35,9 +35,9 @@ uvx marimo edit geometry_of_noise.py --sandbox
 ## Requirements
 
 - Python >= 3.11
-- marimo, numpy, scipy, matplotlib, torch
+- marimo, numpy, scipy, matplotlib
 
-All dependencies are auto-installed via PEP 723 inline metadata when using `--sandbox`.
+All dependencies are auto-installed via PEP 723 inline metadata when using `--sandbox`. No GPU or heavy ML frameworks required — the neural network is implemented in pure numpy for maximum compatibility (including WASM/molab).
 
 ## Competition
 
